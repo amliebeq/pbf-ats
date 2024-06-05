@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 require('dotenv').config();
-const supabase = require('../db');
+const supabase = require('../config/db');
 
 router.get('/', async (req, res) => {
     try {
