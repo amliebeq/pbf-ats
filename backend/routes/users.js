@@ -8,8 +8,21 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const supabase = require('../config/db');
 
-router.get('/', (req, res) => {
-  res.send('Users route');
+router.get('/', authMiddleware, async(req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select();
+        if (error) {
+            console.log(error);
+            res.status(500).send(error);
+        } else {
+            res.send(data);
+        }
+    } catch (error) {
+        console.log(error);
+        res.status(500).send(error);
+    }
 });
 
 router.post('/register',[
@@ -72,5 +85,99 @@ router.post('/register',[
         return res.status(500).json({ error: error.message });
     }
 });
+
+    router.post('/login', [
+        check ('email', 'Please include a valid email').isEmail(), 
+        check ('password', 'Please enter a password with 6 or more characters').isLength({min: 6}),],
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { email, password } = req.body;
+        try {
+            const { data: user, error: findError } = await supabase
+                .from('users')
+                .select('id, password_hash')
+                .eq('email', email)
+                .maybeSingle();
+            
+            if (findError) {
+                console.log(findError);
+                return res.status(500).json({ error: findError.message });
+            }
+            
+            if (!user) {
+                return res.status(400).json({ error: 'User does not exist' });
+            }
+            
+            const isMatch = await bcrypt.compare(password, user.password_hash);
+            if (!isMatch) {
+                return res.status(400).json({ error: 'Invalid credentials' });
+            }
+            
+            const token = jwt.sign(
+                { user_id: user.id, email },
+                process.env.JWT_SECRET,
+                { expiresIn: '1h' },
+            );
+            
+            return res.status(200).json({ token });
+        } catch (error) {
+            console.log(error);
+            return res.status(500).json({ error: error.message });
+        }
+    });
+
+    router.delete('/:user', authMiddleware, async (req, res) => {
+        const { user } = req.params;
+        try {
+            const { data: deletedUser, error: deleteError } = await supabase
+                .from('users')
+                .delete()
+                .eq('id', user)
+                .select();
+            
+            if (deleteError) {
+                console.error(deleteError);
+                return res.status(500).json({ error: deleteError.message });
+            }
+            
+            if (!deletedUser || deletedUser.length === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            return res.status(200).json({ message: 'User deleted successfully' });
+        } catch (error) {
+            console.log(error);
+            return res.status(500).json({ error: error.message });
+        }
+    });
+
+    router.put('/:user', authMiddleware, async (req, res) => {
+        const { user } = req.params;
+        const { first_name, last_name, email, company, job_title } = req.body;
+        try {
+            const { data: updatedUser, error: updateError } = await supabase
+                .from('users')
+                .update({ first_name, last_name, email, company, job_title })
+                .eq('id', user)
+                .select();
+            
+            if (updateError) {
+                console.error(updateError);
+                return res.status(500).json({ error: updateError.message });
+            }
+            
+            if (!updatedUser || updatedUser.length === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            return res.status(200).json({ updatedUser });
+        } catch (error) {
+            console.log(error);
+            return res.status(500).json({ error: error.message });
+        }
+    });
 
 module.exports = router;
