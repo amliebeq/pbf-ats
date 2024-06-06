@@ -5,7 +5,6 @@ const supabase = require('../config/db');
 const authMiddleware = require('../config/auth');
 
 router.get('/', authMiddleware, async (req, res) => {
-    console.log(req.user)
     try {
         const { data: user, error: userError } = await supabase
             .from('users')
