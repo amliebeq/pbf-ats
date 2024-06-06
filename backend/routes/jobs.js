@@ -5,10 +5,25 @@ const supabase = require('../config/db');
 const authMiddleware = require('../config/auth');
 
 router.get('/', authMiddleware, async (req, res) => {
+    console.log(req.user)
     try {
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', req.user.user_id)
+            .maybeSingle();
+
+        if (userError) {
+            console.log(userError);
+            res.status(500).send(userError);
+            return;
+        }
+
         const { data, error } = await supabase
             .from('jobs')
-            .select();
+            .select()
+            .eq('user_id', user.id);
+
         if (error) {
             console.log(error);
             res.status(500).send(error);
